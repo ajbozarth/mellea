@@ -4,6 +4,8 @@ on:
   pull_request:
     types: [opened, reopened, synchronize]
   merge_group:
+  push:
+    branches: ['release/**']
 
 permissions: {}
 

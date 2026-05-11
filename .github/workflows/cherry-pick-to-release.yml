@@ -1,0 +1,70 @@
+name: "Cherry-pick to release branch"
+
+# Cherry-picks one or more commits from main onto a release branch via direct
+# push. The GH App used here needs bypass rights on the release/** ruleset to
+# push cherry-picked commits directly.
+#
+# On conflict the workflow fails with a clear playbook for local resolution.
+# See RELEASE.md for the full patch-release flow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Release branch to cherry-pick onto (e.g. release/v0.6)'
+        type: string
+        required: true
+      shas:
+        description: 'Space- or comma-separated list of commit SHAs from main'
+        type: string
+        required: true
+
+permissions: {}
+
+env:
+  UV_FROZEN: "1"
+  CICD: 1
+
+jobs:
+  cherry-pick:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate target branch
+        env:
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          if ! [[ "${TARGET_BRANCH}" =~ ^release/v ]]; then
+            echo "error: target_branch ${TARGET_BRANCH} must match release/v*"
+            exit 2
+          fi
+      - uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+        id: app-token
+        with:
+          app-id: ${{ vars.CI_APP_ID }}
+          private-key: ${{ secrets.CI_PRIVATE_KEY }}
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.target_branch }}
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Configure git user
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+      - name: Cherry-pick and push
+        env:
+          AUTO_PUSH: "1"
+          INPUT_SHAS: ${{ inputs.shas }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          # Split commas or whitespace into an array of SHAs.
+          SHAS=($(echo "${INPUT_SHAS}" | tr ',' ' '))
+          if [ "${#SHAS[@]}" -eq 0 ]; then
+            echo "error: no SHAs provided"
+            exit 2
+          fi
+          ./.github/scripts/cherry_pick_to_release.sh "${TARGET_BRANCH}" "${SHAS[@]}"
+        shell: bash
