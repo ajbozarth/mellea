@@ -11,12 +11,19 @@ Modes:
   final        — X.Y.0rcN -> X.Y.0         (first final of the minor)
   patch-rc     — X.Y.Z    -> X.Y.(Z+1)rc0  | X.Y.(Z+1)rcN -> X.Y.(Z+1)rc(N+1)
   patch-final  — X.Y.ZrcN (Z>0) -> X.Y.Z   (promote patch rc to final)
+  dev          — X.Y.Z.devN -> X.Y.Z.dev(N+1)   (main-only, ad-hoc bumps)
 
 Note on rc vs patch-rc: when iterating an existing patch rc (e.g. 0.6.1rc0 ->
 0.6.1rc1), both `rc` and `patch-rc` produce the same result. The intent is
 that operators stick with one mode per cycle — `rc` throughout a minor cycle,
 `patch-rc` throughout a patch cycle — without needing to switch mid-cycle.
 `patch-rc` is the only mode that can start a new patch cycle from a final.
+
+Note on dev: `dev` runs on `main`, not a release branch. It iterates main's
+.devN counter. Used by the publish-dev-from-main workflow for ad-hoc,
+case-by-case dev releases (e.g., when a contributor wants a tagged snapshot
+of main for debugging or external testing). Other modes refuse to run on
+main; dev refuses to run on a release branch.
 
 With --dry-run the script only prints the proposed version — no writes or
 commits. Useful for CD to display the target version before bumping.
@@ -74,9 +81,21 @@ def compute_next(current: Version, mode: str) -> Version:
         (current.release[2] if len(current.release) > 2 else 0),
     )
 
+    if mode == "dev":
+        if current.dev is None:
+            raise ValueError(
+                f"mode=dev requires current version to be a .dev release; got {current}."
+            )
+        if current.pre is not None:
+            raise ValueError(
+                f"mode=dev does not support .devN combined with a pre-release "
+                f"segment; got {current}."
+            )
+        return Version(f"{major}.{minor}.{patch}.dev{current.dev + 1}")
+
     if current.dev is not None:
         raise ValueError(
-            f"Current version {current} is a .dev release; bump_version.py only "
+            f"Current version {current} is a .dev release; mode {mode!r} only "
             "operates on release branches (rc/final). Ran on the wrong branch?"
         )
 
@@ -143,7 +162,9 @@ def run(cmd: list[str]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--mode", required=True, choices=["rc", "final", "patch-rc", "patch-final"]
+        "--mode",
+        required=True,
+        choices=["rc", "final", "patch-rc", "patch-final", "dev"],
     )
     parser.add_argument(
         "--dry-run",
@@ -159,9 +180,16 @@ def main() -> int:
 
     if not args.skip_branch_check:
         branch = current_branch()
-        if not branch.startswith("release/v"):
+        if args.mode == "dev":
+            if branch != "main":
+                print(
+                    f"error: mode=dev must run on main; current branch is {branch!r}",
+                    file=sys.stderr,
+                )
+                return 2
+        elif not branch.startswith("release/v"):
             print(
-                f"error: bump_version.py must run on a release/v* branch; "
+                f"error: mode={args.mode} must run on a release/v* branch; "
                 f"current is {branch!r}",
                 file=sys.stderr,
             )

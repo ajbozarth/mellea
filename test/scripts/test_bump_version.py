@@ -37,6 +37,8 @@ bump_version = _load_module()
         ("0.6.1rc3", "patch-rc", "0.6.1rc4"),
         ("0.6.1rc0", "patch-final", "0.6.1"),
         ("0.6.5rc2", "patch-final", "0.6.5"),
+        ("0.6.0.dev0", "dev", "0.6.0.dev1"),
+        ("0.7.0.dev3", "dev", "0.7.0.dev4"),
     ],
 )
 def test_compute_next_happy_paths(current, mode, expected):
@@ -62,6 +64,9 @@ def test_compute_next_happy_paths(current, mode, expected):
         # dev versions should never appear on release branches
         ("0.6.0.dev0", "rc"),
         ("0.6.0.dev0", "final"),
+        # dev mode requires a .dev release; refuses finals and rcs
+        ("0.6.0", "dev"),
+        ("0.6.0rc0", "dev"),
     ],
 )
 def test_compute_next_rejects_disallowed(current, mode):

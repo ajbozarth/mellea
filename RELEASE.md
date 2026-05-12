@@ -32,21 +32,58 @@ compatible with SemVer for final releases).
 
 Invariants:
 
-- `main` always carries `X.Y.0.devN`. `main` is never tagged.
+- `main` always carries `X.Y.0.devN`. `main` is tagged only when a dev
+  publication runs (`publish-dev-from-main` workflow); never during routine
+  commits.
 - Release branches always carry `X.Y.Zrc?` or `X.Y.Z`.
-- Release candidates and `.dev` versions are published as GitHub pre-releases
-  (`gh release create --prerelease`). Pre-releases are hidden from default
-  `pip install mellea`; users opt in with `pip install --pre mellea`.
+- Prereleases (`rcN`, `.devN`) always receive a git tag. Whether they
+  additionally produce a GitHub Release + PyPI upload is controlled by the
+  `PUBLISH_PRERELEASES` repo variable (see below).
+
+## The `PUBLISH_PRERELEASES` flag
+
+Prerelease publishing behavior is governed by the repo variable
+`PUBLISH_PRERELEASES` (default: `false`, unset is treated as false).
+
+| `PUBLISH_PRERELEASES` | What happens for rc / dev | Finals |
+|-----------------------|---------------------------|--------|
+| `false` (default) | tag + push (no GH Release, no PyPI) | tag + GitHub Release + PyPI + changelog entry + sync PR |
+| `true` | tag + push + PyPI upload (still no GH Release) | tag + GitHub Release + PyPI + changelog entry + sync PR |
+
+Prereleases never get a GitHub Release object, regardless of the flag. The
+flag only gates PyPI upload. This keeps the Releases tab scoped to
+user-facing milestones and keeps `CHANGELOG.md` free of per-rc noise — the
+full release flow with notes, changelog, and sync PR runs only for finals.
+
+Because only finals create a GitHub Release, `gh release create --generate-notes`
+on a final naturally picks the previous **final** as the start tag — so
+notes span from the previous minor/patch to this one, not just from the
+most recent rc.
+
+Tags are always pushed regardless. Users can install any tagged prerelease
+via `pip install git+https://github.com/generative-computing/mellea@v0.6.0rc1`
+whether or not the flag is enabled.
+
+Finals (`X.Y.0`, `X.Y.Z`) always follow the full release flow regardless of
+the flag — that's the user-facing path.
+
+To enable prerelease publishing later, a repo admin sets the variable to
+`true` under **Settings → Secrets and variables → Actions → Variables**.
+No code change needed.
 
 ## Workflows
 
 | Workflow | Purpose |
 |----------|---------|
-| `cut-release-branch` | Cut `release/vX.Y` from `main`, bump `main` to next minor `.dev0` |
-| `cd` | Publish a release (tag + GitHub release + PyPI + changelog-sync PR) |
+| `cut-release-branch` | Cut `release/vX.Y` from `main`, publish `X.Y.0rc0`, bump `main` to next minor `.dev0` |
+| `cd` | Publish a release (rc, final, patch-rc, patch-final, or retry a failed publish) |
 | `cherry-pick-to-release` | Cherry-pick commits from `main` onto a release branch |
+| `publish-dev-from-main` | Iterate main's `.devN` counter and publish a dev release |
 
-All three are `workflow_dispatch`-only and run from the GitHub Actions UI.
+All four are `workflow_dispatch`-only and run from the GitHub Actions UI.
+
+Whether any given prerelease (`rc`, `dev`) produces a PyPI artifact depends
+on the `PUBLISH_PRERELEASES` flag described above.
 
 ## Cutting a minor release branch
 
@@ -62,6 +99,9 @@ The workflow:
 
 - Verifies `pyproject.toml` on `main` matches `X.Y.0.devN`.
 - Creates `release/vX.Y` with version set to `X.Y.0rc0`.
+- **Publishes `X.Y.0rc0`** per the `PUBLISH_PRERELEASES` flag — tag-only by
+  default, or full release + PyPI if the flag is enabled. rc0 is treated
+  identically to subsequent rcs; it is not a placeholder.
 - Pushes `main` with version bumped to `X.(Y+1).0.dev0`.
 
 The `main` push requires the release GH App to be listed as a bypass actor in
@@ -137,6 +177,35 @@ Requires push access to `release/**` (or bypass).
 2. Test.
 3. **Run CD** again with `bump_type: patch-rc` for additional rcs if needed.
 4. **Run CD** with `bump_type: patch-final` to promote to `v0.6.1`.
+
+## Publishing a dev release from main
+
+Ad-hoc, case-by-case `.devN` bumps on `main`. Typical uses: a contributor
+wants a tagged snapshot of main for debugging, an external tester needs a
+specific point-in-time artifact, etc. Not intended for routine or scheduled
+releases.
+
+1. **Actions → Publish dev release from main → Run workflow** (must dispatch
+   against `main`).
+2. Run.
+
+The workflow (publish-then-increment):
+
+1. Publishes `main`'s **current** `.devN` per `PUBLISH_PRERELEASES` — tag-only
+   by default, full release flow if enabled. The tag points at the current
+   `main` HEAD.
+2. Iterates pyproject on main: `X.Y.Z.devN → X.Y.Z.dev(N+1)`, commits, pushes.
+
+The invariant is that `main`'s pyproject always carries "the next version
+that would be published." Inspecting main tells you what the next dispatch
+will produce.
+
+If `PUBLISH_PRERELEASES=false` (current default), the outcome is a git tag
+like `v0.7.0.dev3` pointing at `main` HEAD and no other external effects. If
+`PUBLISH_PRERELEASES=true`, the tag is accompanied by a GitHub Release (marked
+pre-release) and a PyPI upload installable via `pip install --pre mellea`.
+Dev publishes never touch `CHANGELOG.md` (prerelease behavior, regardless of
+flag).
 
 ## Rollback and retry
 

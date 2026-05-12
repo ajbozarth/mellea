@@ -27,6 +27,7 @@ env:
 
 jobs:
   cherry-pick:
+    environment: auto-release
     permissions:
       contents: write
     runs-on: ubuntu-latest

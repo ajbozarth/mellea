@@ -26,6 +26,7 @@ env:
 
 jobs:
   cut:
+    environment: auto-release
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -50,5 +51,10 @@ jobs:
       - name: Cut release branch
         env:
           CONFIRM_MINOR: ${{ inputs.confirm_minor }}
+          # Env vars for the inline rc0 release-publish step:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CHGLOG_FILE: CHANGELOG.md
+          PUBLISH_PRERELEASES: ${{ vars.PUBLISH_PRERELEASES || 'false' }}
         run: ./.github/scripts/cut_release_branch.sh
         shell: bash

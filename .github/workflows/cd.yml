@@ -144,5 +144,6 @@ jobs:
           ALLOW_MAIN_RELEASE: ${{ inputs.allow_main_release && '1' || '0' }}
           CHGLOG_FILE: CHANGELOG.md
           GITHUB_REPOSITORY: ${{ github.repository }}
+          PUBLISH_PRERELEASES: ${{ vars.PUBLISH_PRERELEASES || 'false' }}
         run: ./.github/scripts/release.sh
         shell: bash

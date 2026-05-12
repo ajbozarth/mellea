@@ -38,11 +38,15 @@ CHGLOG_FILE="${CHGLOG_FILE:-CHANGELOG.md}"
 TARGET_VERSION=$(uvx --from=toml-cli toml get --toml-path=pyproject.toml project.version)
 TARGET_TAG_NAME="v${TARGET_VERSION}"
 
-# Pre-release tags (rc, dev) are marked as GitHub pre-releases. docs-publish.yml
-# uses this flag to skip production docs deploys for rc's.
-PRERELEASE_FLAG=""
+# Detect prerelease shape (rc or .dev). Prereleases get a git tag only; the
+# tag-push triggers pypi.yml, which gates the PyPI upload on the
+# PUBLISH_PRERELEASES repo variable. No GitHub Release is created for
+# prereleases. Finals go through the full flow: gh release create (which
+# tags, creates the Release object, and emits release:published so
+# docs-publish.yml runs), changelog entry, sync PR.
+IS_PRERELEASE=0
 if [[ "${TARGET_VERSION}" == *rc* ]] || [[ "${TARGET_VERSION}" == *.dev* ]]; then
-    PRERELEASE_FLAG="--prerelease"
+    IS_PRERELEASE=1
 fi
 
 git config --global user.name 'github-actions[bot]'
@@ -51,12 +55,31 @@ git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 # Configure the remote with the token for pushes.
 git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-# Create GitHub release (incl. git tag) with GitHub-native generated notes.
-# The tag lands on the current HEAD of the release branch.
+# Prerelease path: tag and push. That's it. pypi.yml decides whether to
+# upload based on PUBLISH_PRERELEASES. docs-publish.yml doesn't fire
+# (no release:published event).
+if [ "${IS_PRERELEASE}" = "1" ]; then
+    git tag "${TARGET_TAG_NAME}"
+    git push origin "${TARGET_TAG_NAME}"
+    echo "Tagged prerelease ${TARGET_TAG_NAME} (PyPI upload gated on PUBLISH_PRERELEASES in pypi.yml)"
+    exit 0
+fi
+
+# Final path. gh release create creates the tag and the Release object in
+# one step. --generate-notes picks the previous Release as the start; since
+# prereleases do not create Releases, the previous Release is the last
+# final — so notes span from the previous minor/patch to this one.
 gh release create "${TARGET_TAG_NAME}" \
     --target "${RELEASE_BRANCH}" \
-    --generate-notes \
-    ${PRERELEASE_FLAG}
+    --generate-notes
+
+# Publishes from main (the dev case) would never reach here because all
+# dev versions are prereleases; left as defensive guard in case ALLOW_MAIN_RELEASE
+# is ever used for a main-based final, which would not need a sync PR to itself.
+if [ "${RELEASE_BRANCH}" = "main" ]; then
+    echo "Published ${TARGET_TAG_NAME} from main — skipping changelog sync PR"
+    exit 0
+fi
 
 # Pull the generated notes back locally to update the changelog.
 REL_NOTES=$(mktemp)
