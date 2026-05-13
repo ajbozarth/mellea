@@ -1,12 +1,13 @@
 name: "Build and publish package"
 
-# Fires on every v* tag push. For prereleases (rc, .dev), the publish step
-# is gated on the PUBLISH_PRERELEASES repo variable — tag exists in git but
-# PyPI upload only happens when the flag is enabled. Finals always publish.
+# Fires on v* tag push, or via explicit dispatch (release.sh uses this when
+# GITHUB_TOKEN-authored pushes can't auto-trigger). Prereleases are gated on
+# the PUBLISH_PRERELEASES repo variable; finals always publish.
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 env:
   UV_FROZEN: "1"

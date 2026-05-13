@@ -95,6 +95,7 @@ jobs:
     permissions:
       contents: write        # push tags, branches, commits
       pull-requests: write   # release.sh opens changelog sync PR for finals
+      actions: write         # release.sh dispatches pypi.yml and docs-publish.yml
     needs: [guard, code-checks, pre-release-check]
     # Run only if a target version was computed AND (previous jobs succeeded
     # OR the operator set force_release).

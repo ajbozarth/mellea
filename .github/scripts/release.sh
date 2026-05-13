@@ -47,19 +47,27 @@ git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 # Configure the remote with the token for pushes.
 git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-# Prerelease path: push the tag. pypi.yml decides whether to upload.
+# Prerelease path: tag, push, dispatch pypi.yml. (Direct dispatch because
+# GITHUB_TOKEN pushes don't fire downstream push: triggers; pypi.yml gates
+# the upload on PUBLISH_PRERELEASES.)
 if [ "${IS_PRERELEASE}" = "1" ]; then
     git tag "${TARGET_TAG_NAME}"
     git push origin "${TARGET_TAG_NAME}"
+    gh workflow run pypi.yml --ref "${TARGET_TAG_NAME}"
     echo "Tagged prerelease ${TARGET_TAG_NAME}"
     exit 0
 fi
 
-# Final path: create the GitHub Release (which also creates the tag) with
-# notes generated against the previous Release.
+# Final path. gh release create both tags and creates the Release object
+# with notes generated against the previous Release.
 gh release create "${TARGET_TAG_NAME}" \
     --target "${RELEASE_BRANCH}" \
     --generate-notes
+
+# Dispatch follow-on workflows directly (GITHUB_TOKEN-authored release/tag
+# events don't auto-trigger).
+gh workflow run pypi.yml --ref "${TARGET_TAG_NAME}"
+gh workflow run docs-publish.yml --field "release_tag=${TARGET_TAG_NAME}"
 
 # Changelog sync PR is release-branch → main; skip it when publishing from
 # main itself.
