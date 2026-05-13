@@ -1,3 +1,11 @@
+## [v0.6.0](https://github.com/ajbozarth/mellea/releases/tag/v0.6.0) - 2026-05-13
+
+<!-- Release notes generated using configuration in .github/release.yml at release/v0.6 -->
+
+
+
+**Full Changelog**: https://github.com/ajbozarth/mellea/commits/v0.6.0
+
 ## [v0.5.0](https://github.com/generative-computing/mellea/releases/tag/v0.5.0) - 2026-05-05
 
 <!-- Release notes generated using configuration in .github/release.yml at main -->
