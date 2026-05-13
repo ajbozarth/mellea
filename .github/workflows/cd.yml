@@ -94,7 +94,8 @@ jobs:
           echo "Target version: ${TRGT_VERSION}"
   release:
     permissions:
-      contents: write
+      contents: write        # push tags, branches, commits
+      pull-requests: write   # release.sh opens changelog sync PR for finals
     needs: [guard, code-checks, pre-release-check]
     # Run only if a target version was computed AND (previous jobs succeeded
     # OR the operator set force_release).
@@ -105,15 +106,10 @@ jobs:
     runs-on: ubuntu-latest
     concurrency: release
     steps:
-      - uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
-        id: app-token
-        with:
-          app-id: ${{ vars.CI_APP_ID }}
-          private-key: ${{ secrets.CI_PRIVATE_KEY }}
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ github.ref_name }}
-          token: ${{ steps.app-token.outputs.token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
           persist-credentials: false
       - name: Install uv and set the python version
@@ -129,7 +125,7 @@ jobs:
       - name: Bump version on release branch
         if: inputs.bump_type != 'none'
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           BUMP_TYPE: ${{ inputs.bump_type }}
           REF_NAME: ${{ github.ref_name }}
@@ -139,7 +135,7 @@ jobs:
           git push origin "${REF_NAME}"
       - name: Run release script
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_BRANCH: ${{ github.ref_name }}
           ALLOW_MAIN_RELEASE: ${{ inputs.allow_main_release && '1' || '0' }}
           CHGLOG_FILE: CHANGELOG.md

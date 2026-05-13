@@ -104,8 +104,8 @@ The workflow:
   identically to subsequent rcs; it is not a placeholder.
 - Pushes `main` with version bumped to `X.(Y+1).0.dev0`.
 
-The `main` push requires the release GH App to be listed as a bypass actor in
-the `main` branch-protection ruleset (see **Branch protection** below).
+The `main` push requires `github-actions[bot]` to be listed as a bypass actor
+in the `main` branch-protection ruleset (see **Branch protection** below).
 
 ## Publishing a release candidate
 
@@ -152,7 +152,11 @@ except via the changelog-sync PR.
 
 The workflow topologically sorts the SHAs by their position in `git log main`,
 cherry-picks with `git cherry-pick -x`, and pushes directly to the release
-branch (the GH App needs bypass on `release/**`). CI runs on the push.
+branch (`github-actions[bot]` needs bypass on `release/**`). The workflow
+then explicitly dispatches `ci.yml` against the release branch — direct
+pushes authored by `GITHUB_TOKEN` do not automatically fire the `push:`
+trigger on `ci.yml` (GitHub's anti-loop rule), so an explicit dispatch is
+required.
 
 If the workflow hits a conflict it fails with a resolution playbook. To
 resolve:
@@ -223,19 +227,30 @@ stay around indefinitely.
 
 ## Branch protection
 
-The release GH App (configured via `CI_APP_ID` / `CI_PRIVATE_KEY`) needs bypass
-rights on two rulesets:
+All four write-capable workflows authenticate via `secrets.GITHUB_TOKEN` —
+the per-run, per-workflow ephemeral token GitHub provides automatically. No
+GitHub App or personal access token is required.
 
-- `main`: the `cut-release-branch` workflow pushes the `X.(Y+1).0.dev0` bump
-  directly.
-- `release/**`: the `cd` workflow pushes the version-bump commit, and
-  `cherry-pick-to-release` pushes cherry-picked commits directly.
+`github-actions[bot]` (the bot identity the `GITHUB_TOKEN` acts as) needs to
+be listed as a **bypass actor** on two rulesets:
+
+- `main`: `cut-release-branch` pushes the `X.(Y+1).0.dev0` bump directly;
+  `publish-dev-from-main` pushes the `.dev(N+1)` advance commit directly.
+- `release/**`: `cd` pushes the version-bump commit; `cherry-pick-to-release`
+  pushes cherry-picked commits directly.
 
 Recommended ruleset for `release/**`:
 
-- Require pull request review (bypassable by the release GH App).
+- Require pull request review (bypassable by `github-actions[bot]`).
 - Require status checks to pass (CI).
 - No force-push, no deletion.
+
+Each workflow declares the minimum scopes it needs via a `permissions:` block
+inline — e.g. `contents: write` for pushes, `pull-requests: write` for the
+changelog sync PR, `actions: write` in `cherry-pick-to-release` so it can
+explicitly dispatch `ci.yml` after the direct-push (GitHub's anti-loop rule
+means `GITHUB_TOKEN`-authored pushes don't fire `push:` triggers on other
+workflows).
 
 Docs publishing (`docs-publish.yml`) deploys to `docs/production` only when a
 published GitHub release is both (a) not a pre-release and (b) the latest

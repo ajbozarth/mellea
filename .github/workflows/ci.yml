@@ -6,6 +6,14 @@ on:
   merge_group:
   push:
     branches: ['release/**']
+  # Needed so cherry-pick-to-release.yml can `gh workflow run ci.yml` after
+  # direct-pushing cherry-picks (GITHUB_TOKEN pushes don't auto-fire push:).
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or ref to run CI against'
+        type: string
+        required: false
 
 permissions: {}
 
