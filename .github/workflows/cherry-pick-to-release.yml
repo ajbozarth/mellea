@@ -63,7 +63,7 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target_branch }}
         run: |
           # Split commas or whitespace into an array of SHAs.
-          SHAS=($(echo "${INPUT_SHAS}" | tr ',' ' '))
+          IFS=' ,' read -ra SHAS <<< "${INPUT_SHAS}"
           if [ "${#SHAS[@]}" -eq 0 ]; then
             echo "error: no SHAs provided"
             exit 2
