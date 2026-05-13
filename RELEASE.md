@@ -36,38 +36,28 @@ Invariants:
   publication runs (`publish-dev-from-main` workflow); never during routine
   commits.
 - Release branches always carry `X.Y.Zrc?` or `X.Y.Z`.
-- Prereleases (`rcN`, `.devN`) always receive a git tag. Whether they
-  additionally produce a GitHub Release + PyPI upload is controlled by the
-  `PUBLISH_PRERELEASES` repo variable (see below).
+- Prereleases (`rcN`, `.devN`) always receive a git tag. PyPI upload is
+  governed by the `PUBLISH_PRERELEASES` repo variable (see below);
+  prereleases never produce a GitHub Release.
 
 ## The `PUBLISH_PRERELEASES` flag
 
-Prerelease publishing behavior is governed by the repo variable
-`PUBLISH_PRERELEASES` (default: `false`, unset is treated as false).
+Repo variable `PUBLISH_PRERELEASES` (default `false`) governs PyPI upload
+for prereleases. Prereleases never produce a GitHub Release; the flag only
+gates PyPI.
 
-| `PUBLISH_PRERELEASES` | What happens for rc / dev | Finals |
-|-----------------------|---------------------------|--------|
-| `false` (default) | tag + push (no GH Release, no PyPI) | tag + GitHub Release + PyPI + changelog entry + sync PR |
-| `true` | tag + push + PyPI upload (still no GH Release) | tag + GitHub Release + PyPI + changelog entry + sync PR |
+| `PUBLISH_PRERELEASES` | rc / dev | Finals |
+|-----------------------|----------|--------|
+| `false` (default) | tag only | tag + GitHub Release + PyPI + changelog entry + sync PR |
+| `true` | tag + PyPI | tag + GitHub Release + PyPI + changelog entry + sync PR |
 
-Prereleases never get a GitHub Release object, regardless of the flag. The
-flag only gates PyPI upload. This keeps the Releases tab scoped to
-user-facing milestones and keeps `CHANGELOG.md` free of per-rc noise — the
-full release flow with notes, changelog, and sync PR runs only for finals.
+Tags always push. Users can install any tagged prerelease via
+`pip install git+https://github.com/generative-computing/mellea@v0.6.0rc1`
+regardless of the flag.
 
-Because only finals create a GitHub Release, `gh release create --generate-notes`
-on a final naturally picks the previous **final** as the start tag — so
-notes span from the previous minor/patch to this one, not just from the
-most recent rc.
+Finals always follow the full release flow regardless of the flag.
 
-Tags are always pushed regardless. Users can install any tagged prerelease
-via `pip install git+https://github.com/generative-computing/mellea@v0.6.0rc1`
-whether or not the flag is enabled.
-
-Finals (`X.Y.0`, `X.Y.Z`) always follow the full release flow regardless of
-the flag — that's the user-facing path.
-
-To enable prerelease publishing later, a repo admin sets the variable to
+To enable prerelease publishing on PyPI, a repo admin sets the variable to
 `true` under **Settings → Secrets and variables → Actions → Variables**.
 No code change needed.
 
@@ -76,7 +66,7 @@ No code change needed.
 | Workflow | Purpose |
 |----------|---------|
 | `cut-release-branch` | Cut `release/vX.Y` from `main`, publish `X.Y.0rc0`, bump `main` to next minor `.dev0` |
-| `cd` | Publish a release (rc, final, patch-rc, patch-final, or retry a failed publish) |
+| `publish-release` | Publish a release (rc, final, patch-rc, patch-final, or retry a failed publish) |
 | `cherry-pick-to-release` | Cherry-pick commits from `main` onto a release branch |
 | `publish-dev-from-main` | Iterate main's `.devN` counter and publish a dev release |
 
@@ -99,9 +89,8 @@ The workflow:
 
 - Verifies `pyproject.toml` on `main` matches `X.Y.0.devN`.
 - Creates `release/vX.Y` with version set to `X.Y.0rc0`.
-- **Publishes `X.Y.0rc0`** per the `PUBLISH_PRERELEASES` flag — tag-only by
-  default, or full release + PyPI if the flag is enabled. rc0 is treated
-  identically to subsequent rcs; it is not a placeholder.
+- Publishes `X.Y.0rc0` per the `PUBLISH_PRERELEASES` flag (tag-only by
+  default; tag + PyPI when enabled).
 - Pushes `main` with version bumped to `X.(Y+1).0.dev0`.
 
 The `main` push requires `github-actions[bot]` to be listed as a bypass actor
@@ -111,7 +100,7 @@ in the `main` branch-protection ruleset (see **Branch protection** below).
 
 Once a release branch exists:
 
-1. Go to **Actions → Run CD → Run workflow**.
+1. Go to **Actions → Publish release → Run workflow**.
 2. Select the release branch (e.g. `release/v0.6`) from the branch picker.
 3. Choose `bump_type: rc`.
 4. Run.
@@ -120,28 +109,27 @@ The workflow:
 
 - Computes the next rc (e.g. `0.6.0rc0` → `0.6.0rc1`).
 - Commits the bump to the release branch.
-- Creates tag `v{version}`, a GitHub pre-release, and publishes to PyPI.
-- Appends to `CHANGELOG.md` on the release branch.
-- Opens a PR against `main` syncing the changelog entry.
-
-Merge the changelog-sync PR at your convenience.
+- Pushes tag `v{version}`. PyPI upload happens only when
+  `PUBLISH_PRERELEASES=true`. No GitHub Release object, no changelog entry,
+  no sync PR — those are reserved for finals.
 
 ## Promoting an RC to a final minor
 
 When testing on an RC is complete:
 
-1. **Actions → Run CD → Run workflow** against the same release branch.
+1. **Actions → Publish release → Run workflow** against the same release branch.
 2. `bump_type: final`.
 3. Run.
 
-This tags `v0.6.0`, publishes a non-prerelease GitHub release (no
-`--prerelease` flag), uploads to PyPI as the latest, and triggers the docs
-production deploy.
+This creates the `v0.6.0` GitHub Release (with auto-generated notes from
+the previous final), uploads to PyPI, appends to `CHANGELOG.md` on the
+release branch, opens a sync PR to `main` with the changelog delta, and
+triggers the docs production deploy.
 
 ## Patch releases
 
-Patches live on the original release branch; they never touch `main` directly
-except via the changelog-sync PR.
+Patches live on the original release branch. `main` is touched only when a
+`patch-final` lands and opens its changelog sync PR.
 
 ### 1. Cherry-pick fixes
 
@@ -152,11 +140,9 @@ except via the changelog-sync PR.
 
 The workflow topologically sorts the SHAs by their position in `git log main`,
 cherry-picks with `git cherry-pick -x`, and pushes directly to the release
-branch (`github-actions[bot]` needs bypass on `release/**`). The workflow
-then explicitly dispatches `ci.yml` against the release branch — direct
-pushes authored by `GITHUB_TOKEN` do not automatically fire the `push:`
-trigger on `ci.yml` (GitHub's anti-loop rule), so an explicit dispatch is
-required.
+branch (`github-actions[bot]` needs bypass on `release/**`). It then
+dispatches `ci.yml` explicitly against the release branch since
+`GITHUB_TOKEN` pushes do not fire `push:` triggers on other workflows.
 
 If the workflow hits a conflict it fails with a resolution playbook. To
 resolve:
@@ -176,11 +162,11 @@ Requires push access to `release/**` (or bypass).
 
 ### 2. Publish a patch RC and final
 
-1. **Run CD** against `release/v0.6` with `bump_type: patch-rc`. Produces
+1. **Publish release** against `release/v0.6` with `bump_type: patch-rc`. Produces
    e.g. `v0.6.1rc0`.
 2. Test.
-3. **Run CD** again with `bump_type: patch-rc` for additional rcs if needed.
-4. **Run CD** with `bump_type: patch-final` to promote to `v0.6.1`.
+3. **Publish release** again with `bump_type: patch-rc` for additional rcs if needed.
+4. **Publish release** with `bump_type: patch-final` to promote to `v0.6.1`.
 
 ## Publishing a dev release from main
 
@@ -204,19 +190,16 @@ The invariant is that `main`'s pyproject always carries "the next version
 that would be published." Inspecting main tells you what the next dispatch
 will produce.
 
-If `PUBLISH_PRERELEASES=false` (current default), the outcome is a git tag
-like `v0.7.0.dev3` pointing at `main` HEAD and no other external effects. If
-`PUBLISH_PRERELEASES=true`, the tag is accompanied by a GitHub Release (marked
-pre-release) and a PyPI upload installable via `pip install --pre mellea`.
-Dev publishes never touch `CHANGELOG.md` (prerelease behavior, regardless of
-flag).
+With `PUBLISH_PRERELEASES=false` (default) the outcome is a tag like
+`v0.7.0.dev3` pointing at main HEAD and nothing else. With the flag enabled
+it additionally uploads to PyPI (installable via `pip install --pre mellea`).
+Dev publishes never create a GitHub Release or touch `CHANGELOG.md`.
 
 ## Rollback and retry
 
-If a CD run fails partway through — e.g. PyPI upload failed but the tag was
-already created — the `bump_type: none` option re-runs CD against whatever
-version is currently in `pyproject.toml`, skipping the bump step. Useful for
-resuming a stuck release.
+`bump_type: none` re-runs CD against whatever version is currently in
+`pyproject.toml`, skipping the version-bump step. Useful when a previous
+run failed after the bump committed but before the publish completed.
 
 ## Release branch retention
 
@@ -227,16 +210,15 @@ stay around indefinitely.
 
 ## Branch protection
 
-All four write-capable workflows authenticate via `secrets.GITHUB_TOKEN` —
-the per-run, per-workflow ephemeral token GitHub provides automatically. No
-GitHub App or personal access token is required.
+All four write-capable workflows authenticate via `secrets.GITHUB_TOKEN`.
+Each declares the scopes it needs via an inline `permissions:` block.
 
-`github-actions[bot]` (the bot identity the `GITHUB_TOKEN` acts as) needs to
-be listed as a **bypass actor** on two rulesets:
+`github-actions[bot]` (the identity `GITHUB_TOKEN` acts as) needs to be
+listed as a **bypass actor** on two rulesets:
 
 - `main`: `cut-release-branch` pushes the `X.(Y+1).0.dev0` bump directly;
   `publish-dev-from-main` pushes the `.dev(N+1)` advance commit directly.
-- `release/**`: `cd` pushes the version-bump commit; `cherry-pick-to-release`
+- `release/**`: `publish-release` pushes the version-bump commit; `cherry-pick-to-release`
   pushes cherry-picked commits directly.
 
 Recommended ruleset for `release/**`:
@@ -245,17 +227,9 @@ Recommended ruleset for `release/**`:
 - Require status checks to pass (CI).
 - No force-push, no deletion.
 
-Each workflow declares the minimum scopes it needs via a `permissions:` block
-inline — e.g. `contents: write` for pushes, `pull-requests: write` for the
-changelog sync PR, `actions: write` in `cherry-pick-to-release` so it can
-explicitly dispatch `ci.yml` after the direct-push (GitHub's anti-loop rule
-means `GITHUB_TOKEN`-authored pushes don't fire `push:` triggers on other
-workflows).
-
-Docs publishing (`docs-publish.yml`) deploys to `docs/production` only when a
-published GitHub release is both (a) not a pre-release and (b) the latest
-final by semver. RC releases and older-branch patches do not overwrite
-production docs.
+Docs publishing (`docs-publish.yml`) deploys to `docs/production` only when
+a published GitHub Release is the latest final by semver, so older-branch
+patches don't overwrite production docs.
 
 ## Docs behavior by release type
 
@@ -266,5 +240,5 @@ production docs.
 | Patch on latest minor (`v0.6.1` after `v0.6.0`) | deployed | unchanged |
 | Patch on older minor (`v0.5.1` after `v0.6.0`) | unchanged | unchanged |
 
-Versioned docs (per-minor URL prefixes and a version switcher) is the proper
-long-term fix; see follow-up issue.
+Versioned docs (per-minor URL prefixes and a version switcher) would supersede
+the latest-final-by-semver gate; not in scope here.

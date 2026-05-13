@@ -35,7 +35,7 @@ jobs:
     environment: auto-release
     permissions:
       contents: write    # push cherry-picks to release branch
-      actions: write     # dispatch ci.yml after push (GITHUB_TOKEN pushes don't auto-trigger)
+      actions: write     # dispatch ci.yml after push
     runs-on: ubuntu-latest
     steps:
       - name: Validate target branch
@@ -71,9 +71,6 @@ jobs:
           ./.github/scripts/cherry_pick_to_release.sh "${TARGET_BRANCH}" "${SHAS[@]}"
         shell: bash
       - name: Trigger CI on release branch
-        # GITHUB_TOKEN pushes do not fire push:/pull_request: triggers, so
-        # ci.yml's `push: branches: ['release/**']` would not run after the
-        # direct cherry-pick push. Dispatch it explicitly here.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target_branch }}

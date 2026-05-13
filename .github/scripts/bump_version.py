@@ -1,32 +1,22 @@
 #!/usr/bin/env python3
-"""Compute and commit the next release version on a release branch.
+"""Compute and commit the next release version.
 
 Reads the current version from pyproject.toml, computes the next version per
 the requested mode, writes it back, refreshes uv.lock, and commits. The
-computed version is printed to stdout so the caller (CD workflow) can capture
-it.
+computed version is printed to stdout for callers to capture.
 
 Modes:
   rc           — X.Y.ZrcN -> X.Y.Zrc(N+1)
   final        — X.Y.0rcN -> X.Y.0         (first final of the minor)
   patch-rc     — X.Y.Z    -> X.Y.(Z+1)rc0  | X.Y.(Z+1)rcN -> X.Y.(Z+1)rc(N+1)
   patch-final  — X.Y.ZrcN (Z>0) -> X.Y.Z   (promote patch rc to final)
-  dev          — X.Y.Z.devN -> X.Y.Z.dev(N+1)   (main-only, ad-hoc bumps)
+  dev          — X.Y.Z.devN -> X.Y.Z.dev(N+1)   (main-only)
 
-Note on rc vs patch-rc: when iterating an existing patch rc (e.g. 0.6.1rc0 ->
-0.6.1rc1), both `rc` and `patch-rc` produce the same result. The intent is
-that operators stick with one mode per cycle — `rc` throughout a minor cycle,
-`patch-rc` throughout a patch cycle — without needing to switch mid-cycle.
-`patch-rc` is the only mode that can start a new patch cycle from a final.
+`dev` mode runs on `main` and iterates its .devN counter. All other modes
+run on `release/v*` branches.
 
-Note on dev: `dev` runs on `main`, not a release branch. It iterates main's
-.devN counter. Used by the publish-dev-from-main workflow for ad-hoc,
-case-by-case dev releases (e.g., when a contributor wants a tagged snapshot
-of main for debugging or external testing). Other modes refuse to run on
-main; dev refuses to run on a release branch.
-
-With --dry-run the script only prints the proposed version — no writes or
-commits. Useful for CD to display the target version before bumping.
+With --dry-run the script prints the proposed version and exits without
+writing or committing.
 """
 
 from __future__ import annotations
@@ -174,7 +164,7 @@ def main() -> int:
     parser.add_argument(
         "--skip-branch-check",
         action="store_true",
-        help="Skip the `release/v*` branch assertion. For local testing only.",
+        help="Skip the branch assertion. For local testing only.",
     )
     args = parser.parse_args()
 

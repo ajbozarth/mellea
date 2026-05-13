@@ -315,12 +315,10 @@ jobs:
       contents: write
     timeout-minutes: 10
 
-    # Deploy on: push to main, release, force_publish via dispatch, or PRs
-    # labelled "docs-preview" (→ docs/preview branch). Only finals create a
-    # GitHub Release (prereleases are tag-only), so the release trigger
-    # naturally fires only for finals — no prerelease filter needed. The
-    # runtime latest-final-by-semver check below still gates older-branch
-    # patches from overwriting production docs.
+    # Deploy on: push to main, release event, force_publish via dispatch,
+    # or PRs labelled "docs-preview" (→ docs/preview branch). The runtime
+    # latest-final-by-semver check below prevents older-branch patches
+    # from overwriting production docs.
     if: >-
       github.event_name == 'push' ||
       github.event_name == 'release' ||

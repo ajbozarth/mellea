@@ -1,24 +1,21 @@
 #!/bin/bash
-# Tag and publish a release from the currently checked-out release branch.
-#
-# Expects the version to already be written to pyproject.toml (bump_version.py
-# runs earlier in the workflow; this script does not modify the version).
+# Publish a release from the currently checked-out branch. Uses the version
+# already written to pyproject.toml; does not modify it.
 #
 # Env:
-#   RELEASE_BRANCH (required) — the release branch name (e.g. release/v0.6).
+#   RELEASE_BRANCH (required) — branch being published (e.g. release/v0.6).
 #                              Guards against accidentally releasing from main.
 #   GH_TOKEN       (required) — for gh release create / gh pr create
 #   GITHUB_REPOSITORY (required) — owner/repo, used for origin URL and links
 #   CHGLOG_FILE    (optional) — path to changelog (default: CHANGELOG.md)
 #   ALLOW_MAIN_RELEASE=1 (optional) — bypass the main-branch guard
 #
-# Behavior:
-#   1. Creates tag v${VERSION} and a GitHub release from the checked-out HEAD.
-#      Passes --prerelease if VERSION contains rc or .dev.
-#   2. Appends a changelog entry to ${CHGLOG_FILE} on the release branch and
-#      pushes it.
-#   3. Opens a PR from chore/changelog-sync-${VERSION} to main with just the
-#      changelog delta. Main is never pushed to directly.
+# Prereleases (rc, .dev): push a git tag. PyPI upload is handled by pypi.yml
+# when the tag push fires, gated on PUBLISH_PRERELEASES.
+#
+# Finals: create a GitHub Release (tag + Release object + generated notes),
+# append to the changelog on the release branch, and open a sync PR to main
+# with the changelog delta.
 
 set -e
 set -x
@@ -38,12 +35,7 @@ CHGLOG_FILE="${CHGLOG_FILE:-CHANGELOG.md}"
 TARGET_VERSION=$(uvx --from=toml-cli toml get --toml-path=pyproject.toml project.version)
 TARGET_TAG_NAME="v${TARGET_VERSION}"
 
-# Detect prerelease shape (rc or .dev). Prereleases get a git tag only; the
-# tag-push triggers pypi.yml, which gates the PyPI upload on the
-# PUBLISH_PRERELEASES repo variable. No GitHub Release is created for
-# prereleases. Finals go through the full flow: gh release create (which
-# tags, creates the Release object, and emits release:published so
-# docs-publish.yml runs), changelog entry, sync PR.
+# Detect prerelease shape (rc or .dev).
 IS_PRERELEASE=0
 if [[ "${TARGET_VERSION}" == *rc* ]] || [[ "${TARGET_VERSION}" == *.dev* ]]; then
     IS_PRERELEASE=1
@@ -55,27 +47,22 @@ git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 # Configure the remote with the token for pushes.
 git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-# Prerelease path: tag and push. That's it. pypi.yml decides whether to
-# upload based on PUBLISH_PRERELEASES. docs-publish.yml doesn't fire
-# (no release:published event).
+# Prerelease path: push the tag. pypi.yml decides whether to upload.
 if [ "${IS_PRERELEASE}" = "1" ]; then
     git tag "${TARGET_TAG_NAME}"
     git push origin "${TARGET_TAG_NAME}"
-    echo "Tagged prerelease ${TARGET_TAG_NAME} (PyPI upload gated on PUBLISH_PRERELEASES in pypi.yml)"
+    echo "Tagged prerelease ${TARGET_TAG_NAME}"
     exit 0
 fi
 
-# Final path. gh release create creates the tag and the Release object in
-# one step. --generate-notes picks the previous Release as the start; since
-# prereleases do not create Releases, the previous Release is the last
-# final — so notes span from the previous minor/patch to this one.
+# Final path: create the GitHub Release (which also creates the tag) with
+# notes generated against the previous Release.
 gh release create "${TARGET_TAG_NAME}" \
     --target "${RELEASE_BRANCH}" \
     --generate-notes
 
-# Publishes from main (the dev case) would never reach here because all
-# dev versions are prereleases; left as defensive guard in case ALLOW_MAIN_RELEASE
-# is ever used for a main-based final, which would not need a sync PR to itself.
+# Changelog sync PR is release-branch → main; skip it when publishing from
+# main itself.
 if [ "${RELEASE_BRANCH}" = "main" ]; then
     echo "Published ${TARGET_TAG_NAME} from main — skipping changelog sync PR"
     exit 0

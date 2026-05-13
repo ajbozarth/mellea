@@ -1,4 +1,4 @@
-name: "Run CD"
+name: "Publish release"
 
 # Publishes a release from a release/v* branch. Operator picks a bump_type
 # to advance the version (rc, final, patch-rc, patch-final) or re-publish
@@ -10,10 +10,9 @@ on:
       bump_type:
         description: >-
           How to advance the version before publishing. Use `rc` throughout a
-          minor cycle, `patch-rc` throughout a patch cycle (the two overlap
-          when iterating a patch rc — pick one per cycle), `final` /
-          `patch-final` to promote, or `none` to republish the pyproject
-          version as-is.
+          minor cycle, `patch-rc` throughout a patch cycle, `final` /
+          `patch-final` to promote an rc, or `none` to republish the
+          pyproject version as-is.
         type: choice
         options:
           - rc

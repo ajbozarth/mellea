@@ -74,11 +74,8 @@ git add pyproject.toml uv.lock
 git commit -m "release: cut v${MAJOR}.${MINOR} branch at ${RC_VERSION} [skip ci]"
 git push origin "${RELEASE_BRANCH}"
 
-# Publish rc0 as a first-class prerelease (same treatment as subsequent rcs).
-# With PUBLISH_PRERELEASES disabled, this creates and pushes the v{rc0} tag
-# only; with it enabled, it produces a full GitHub release + PyPI upload +
-# changelog entry + sync PR. Either way, rc0 is architecturally equivalent
-# to rcN rather than a placeholder that never materializes.
+# Publish rc0 via release.sh — tag-only when PUBLISH_PRERELEASES is disabled,
+# full prerelease flow when enabled.
 RELEASE_BRANCH="${RELEASE_BRANCH}" "$(dirname "$0")/release.sh"
 
 # Back to main and bump to the next dev version.
@@ -94,4 +91,4 @@ echo ""
 echo "Cut ${RELEASE_BRANCH} at ${RC_VERSION}"
 echo "Bumped main to ${NEXT_DEV_VERSION}"
 echo ""
-echo "Next step: dispatch the CD workflow against ${RELEASE_BRANCH} with bump_type=rc to produce the next rc (rc1)."
+echo "Next step: dispatch the Publish release workflow against ${RELEASE_BRANCH} with bump_type=rc to produce the next rc (rc1)."

@@ -6,8 +6,8 @@ on:
   merge_group:
   push:
     branches: ['release/**']
-  # Needed so cherry-pick-to-release.yml can `gh workflow run ci.yml` after
-  # direct-pushing cherry-picks (GITHUB_TOKEN pushes don't auto-fire push:).
+  # Dispatchable by cherry-pick-to-release.yml to run CI on direct-pushed
+  # cherry-picks.
   workflow_dispatch:
     inputs:
       ref:

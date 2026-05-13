@@ -17,11 +17,8 @@
 #      any order and they apply in original merge order.
 #   4. Runs git cherry-pick -x for each SHA in sorted order.
 #   5. On conflict, stops and prints a resolution playbook.
-#   6. On success, prints the push command (does not auto-push; the calling
-#      CI workflow handles pushing when run under CI).
-#
-# When run under CI (with AUTO_PUSH=1 set), the script will push to origin
-# after a successful cherry-pick sequence. The CI workflow sets this.
+#   6. On success, either pushes to origin (when AUTO_PUSH=1, set by the
+#      CI workflow) or prints the push command for the operator to run.
 
 set -eu
 
