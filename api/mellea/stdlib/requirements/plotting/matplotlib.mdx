@@ -1,0 +1,62 @@
+---
+title: "mellea.stdlib.requirements.plotting.matplotlib"
+sidebarTitle: "mellea.stdlib.requirements.plotting.matplotlib"
+description: "Matplotlib-specific code generation requirements."
+---
+
+
+import { SidebarFix } from "/snippets/SidebarFix.mdx";
+
+<SidebarFix />
+
+Matplotlib-specific code generation requirements.
+
+
+
+
+
+This module validates Python code that uses matplotlib for plotting, ensuring
+proper headless backend configuration, file I/O, and dependency availability.
+
+
+## Classes
+
+<div className="w-full h-px bg-gray-200 dark:bg-gray-700 my-4" />
+
+
+### <span className="ml-2 inline-flex items-center rounded-full px-2 py-1 text-[0.7rem] font-bold tracking-wide bg-[#4ADE8033]/20 text-[#15803D]">CLASS</span> `MatplotlibHeadlessBackend` <sup><a href="https://github.com/generative-computing/mellea/blob/v0.7.0.dev0/mellea/stdlib/requirements/plotting/matplotlib.py#L196" target="_blank"><Icon icon="github" style="width: 14px; height: 14px;" /></a></sup>
+
+
+Validates that matplotlib is configured with a headless backend.
+
+Matplotlib must be explicitly configured with a headless backend (e.g., 'Agg')
+via matplotlib.use() before importing pyplot. Interactive backends like 'TkAgg'
+will fail because they require a display server.
+
+
+<div className="w-full h-px bg-gray-200 dark:bg-gray-700 my-4" />
+
+### <span className="ml-2 inline-flex items-center rounded-full px-2 py-1 text-[0.7rem] font-bold tracking-wide bg-[#4ADE8033]/20 text-[#15803D]">CLASS</span> `PlotFileSaved` <sup><a href="https://github.com/generative-computing/mellea/blob/v0.7.0.dev0/mellea/stdlib/requirements/plotting/matplotlib.py#L253" target="_blank"><Icon icon="github" style="width: 14px; height: 14px;" /></a></sup>
+
+
+Validates that a plot is explicitly saved to a file.
+
+The plot must be saved using savefig() with the specified output_path.
+This prevents interactive plot displays (plt.show()) and ensures output
+can be captured and verified.
+
+**Args:**
+- `output_path`: File path where the plot should be saved (e.g., '/tmp/plot.png').
+
+
+<div className="w-full h-px bg-gray-200 dark:bg-gray-700 my-4" />
+
+### <span className="ml-2 inline-flex items-center rounded-full px-2 py-1 text-[0.7rem] font-bold tracking-wide bg-[#4ADE8033]/20 text-[#15803D]">CLASS</span> `PlotDependenciesAvailable` <sup><a href="https://github.com/generative-computing/mellea/blob/v0.7.0.dev0/mellea/stdlib/requirements/plotting/matplotlib.py#L300" target="_blank"><Icon icon="github" style="width: 14px; height: 14px;" /></a></sup>
+
+
+Validates that matplotlib and numpy are importable.
+
+Both matplotlib and numpy must be available in the execution environment.
+This requirement checks import availability but does not execute code.
+
+<div className="w-full h-px bg-gray-200 dark:bg-gray-700 my-4" />
